@@ -18,41 +18,61 @@ go get github.com/twiny/flare
 ```
 
 ## Usage
+
 ### Basic Usage
 
 ```go
-import "github.com/twiny/flare"
+package main
 
-n := flare.New()
+import (
+ "github.com/twiny/flare"
+)
 
-// Spawn a goroutine
-go func() {
-    select {
-    case <-n.Done():
-        return
-    default:
-        // Do some work
-    }
-}()
+func main() {
+ n := flare.NewNotifier()
 
-// Signal the goroutine to stop
-n.Cancel()
+ // Spawn a goroutine
+ go func() {
+  select {
+  case <-n.Hold():
+   return
+  default:
+   // Do some work
+  }
+ }()
+
+ // Signal the goroutine to stop
+ n.Signal()
+}
 ```
 
 ### Integration with context.Context
 
 ```go
-import (
-    "context"
-    "github.com/twiny/flare"
-)
+func main() {
+ n, cancel := flare.NewNotifierWithCancel(context.Background())
+ // Canceling the context will also signal the flare Notifier.
+ defer cancel()
 
-ctx, cancel := context.WithCancel(context.Background())
+ // Spawn a goroutine
+ go func() {
+  select {
+  case <-n.Hold():
+   return
+  default:
+   // Do some work
+  }
+ }()
 
-n := flare.NewWithContext(ctx)
-
-// Goroutines can listen to n.Done() for exit signals.
-
-// Canceling the context will also signal the flare Notifier.
-cancel()
+ // Signal the goroutine to stop
+ n.Signal()
+}
 ```
+
+## Wiki
+
+More documentation can be found in the [wiki](https://github.com/twiny/flare/wiki).
+
+## Bugs
+
+Bugs or suggestions? Please visit the [issue tracker](https://github.com/twiny/flare/issues).

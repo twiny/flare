@@ -6,75 +6,73 @@ import (
 	"time"
 )
 
-func TestNew(t *testing.T) {
-	n := New()
+func TestNewNotifier(t *testing.T) {
+	n := NewNotifier()
 	if n == nil {
 		t.Fatal("expected Notifier, got nil")
 	}
 
 	select {
-	case <-n.Done():
-		t.Fatal("Notifier should not be done yet")
+	case <-n.Hold():
+		t.Fatal("Notifier should not be signaled yet")
 	default:
 	}
 
-	n.Cancel()
+	n.Signal()
 
 	select {
-	case <-n.Done():
+	case <-n.Hold():
 	default:
-		t.Fatal("Notifier should be done")
+		t.Fatal("Notifier should be signaled")
 	}
 }
-
-func TestNewWithContext(t *testing.T) {
+func TestNewNotifierWithCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel() // Just to be safe
+	defer cancel() // Ensure context cancel function is called to avoid leaking resources
 
-	n := NewWithContext(ctx)
+	n, _ := NewNotifierWithCancel(ctx)
 	if n == nil {
 		t.Fatal("expected Notifier, got nil")
 	}
 
 	select {
-	case <-n.Done():
-		t.Fatal("Notifier should not be done yet")
+	case <-n.Hold():
+		t.Fatal("Notifier should not be signaled yet")
 	default:
 	}
 
 	cancel()
 
-	time.Sleep(50 * time.Millisecond) // Giving some time for the goroutine to trigger Cancel
-
+	// Wait for the notifier to be signaled, with a timeout to prevent hanging indefinitely.
 	select {
-	case <-n.Done():
-	default:
-		t.Fatal("Notifier should be done")
+	case <-n.Hold():
+	case <-time.After(1 * time.Second):
+		t.Fatal("Notifier should be signaled after context cancel")
 	}
 }
-
-func TestDoubleCancel(t *testing.T) {
+func TestNewNotifierWithCancel_SignalBeforeContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	n := NewWithContext(ctx)
+	defer cancel()
+
+	n, _ := NewNotifierWithCancel(ctx)
 	if n == nil {
 		t.Fatal("expected Notifier, got nil")
 	}
 
-	select {
-	case <-n.Done():
-		t.Fatal("Notifier should not be done yet")
-	default:
-	}
-
-	n.Cancel()
+	n.Signal()
 
 	select {
-	case <-n.Done():
+	case <-n.Hold():
 	default:
-		t.Fatal("Notifier should be done after manual cancel")
+		t.Fatal("Notifier should be signaled after Signal call")
 	}
 
-	cancel() // This should not cause any panic or issue, as the notifier's Cancel should be idempotent
+	cancel()
 
-	time.Sleep(100 * time.Millisecond) // Giving some time to ensure any potential panic would have occurred
+	// After canceling the context, the notifier should still be in the signaled state.
+	select {
+	case <-n.Hold():
+	default:
+		t.Fatal("Notifier should remain signaled after context cancel")
+	}
 }
